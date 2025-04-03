@@ -5,8 +5,10 @@ import { useEvent, useSize } from "react-use"
 import styled from "styled-components"
 import {
 	ClineApiReqInfo,
+	ClineAskQuestion,
 	ClineAskUseMcpServer,
 	ClineMessage,
+	ClinePlanModeResponse,
 	ClineSayTool,
 	COMPLETION_RESULT_CHANGES_FLAG,
 	ExtensionMessage,
@@ -15,18 +17,20 @@ import { COMMAND_OUTPUT_STRING, COMMAND_REQ_APP_STRING } from "../../../../src/s
 import { useExtensionState } from "../../context/ExtensionStateContext"
 import { findMatchingResourceOrTemplate, getMcpServerDisplayName } from "../../utils/mcp"
 import { vscode } from "../../utils/vscode"
+import { CheckmarkControl } from "../common/CheckmarkControl"
 import { CheckpointControls, CheckpointOverlay } from "../common/CheckpointControls"
 import CodeAccordian, { cleanPathPrefix } from "../common/CodeAccordian"
 import CodeBlock, { CODE_BLOCK_BG_COLOR } from "../common/CodeBlock"
 import MarkdownBlock from "../common/MarkdownBlock"
-import SuccessButton from "../common/SuccessButton"
 import Thumbnails from "../common/Thumbnails"
 import McpResourceRow from "../mcp/McpResourceRow"
 import McpToolRow from "../mcp/McpToolRow"
-import { highlightMentions } from "./TaskHeader"
-import CreditLimitError from "./CreditLimitError"
-import { CheckmarkControl } from "../common/CheckmarkControl"
 import McpResponseDisplay from "../mcp/McpResponseDisplay"
+import CreditLimitError from "./CreditLimitError"
+import { OptionsButtons } from "./OptionsButtons"
+import { highlightMentions } from "./TaskHeader"
+import SuccessButton from "../common/SuccessButton"
+import TaskFeedbackButtons from "./TaskFeedbackButtons"
 
 const ChatRowContainer = styled.div`
 	padding: 10px 6px 10px 15px;
@@ -997,6 +1001,17 @@ export const ChatRowContent = ({ message, isExpanded, onToggleExpand, lastModifi
 								}}>
 								{icon}
 								{title}
+								<TaskFeedbackButtons
+									messageTs={message.ts}
+									isFromHistory={
+										!isLast ||
+										lastModifiedMessage?.ask === "resume_completed_task" ||
+										lastModifiedMessage?.ask === "resume_task"
+									}
+									style={{
+										marginLeft: "auto",
+									}}
+								/>
 							</div>
 							<div
 								style={{
@@ -1017,8 +1032,8 @@ export const ChatRowContent = ({ message, isExpanded, onToggleExpand, lastModifi
 											})
 										}}
 										style={{
-											width: "100%",
 											cursor: seeNewChangesDisabled ? "wait" : "pointer",
+											width: "100%",
 										}}>
 										<i className="codicon codicon-new-file" style={{ marginRight: 6 }} />
 										See new changes
@@ -1139,6 +1154,17 @@ export const ChatRowContent = ({ message, isExpanded, onToggleExpand, lastModifi
 									}}>
 									{icon}
 									{title}
+									<TaskFeedbackButtons
+										messageTs={message.ts}
+										isFromHistory={
+											!isLast ||
+											lastModifiedMessage?.ask === "resume_completed_task" ||
+											lastModifiedMessage?.ask === "resume_task"
+										}
+										style={{
+											marginLeft: "auto",
+										}}
+									/>
 								</div>
 								<div
 									style={{
@@ -1176,6 +1202,19 @@ export const ChatRowContent = ({ message, isExpanded, onToggleExpand, lastModifi
 						return null // Don't render anything when we get a completion_result ask without text
 					}
 				case "followup":
+					let question: string | undefined
+					let options: string[] | undefined
+					let selected: string | undefined
+					try {
+						const parsedMessage = JSON.parse(message.text || "{}") as ClineAskQuestion
+						question = parsedMessage.question
+						options = parsedMessage.options
+						selected = parsedMessage.selected
+					} catch (e) {
+						// legacy messages would pass question directly
+						question = message.text
+					}
+
 					return (
 						<>
 							{title && (
@@ -1185,16 +1224,39 @@ export const ChatRowContent = ({ message, isExpanded, onToggleExpand, lastModifi
 								</div>
 							)}
 							<div style={{ paddingTop: 10 }}>
-								<Markdown markdown={message.text} />
+								<Markdown markdown={question} />
+								<OptionsButtons
+									options={options}
+									selected={selected}
+									isActive={isLast && lastModifiedMessage?.ask === "followup"}
+								/>
 							</div>
 						</>
 					)
-				case "plan_mode_response":
+				case "plan_mode_respond": {
+					let response: string | undefined
+					let options: string[] | undefined
+					let selected: string | undefined
+					try {
+						const parsedMessage = JSON.parse(message.text || "{}") as ClinePlanModeResponse
+						response = parsedMessage.response
+						options = parsedMessage.options
+						selected = parsedMessage.selected
+					} catch (e) {
+						// legacy messages would pass response directly
+						response = message.text
+					}
 					return (
 						<div style={{}}>
-							<Markdown markdown={message.text} />
+							<Markdown markdown={response} />
+							<OptionsButtons
+								options={options}
+								selected={selected}
+								isActive={isLast && lastModifiedMessage?.ask === "plan_mode_respond"}
+							/>
 						</div>
 					)
+				}
 				default:
 					return null
 			}
